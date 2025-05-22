@@ -19,11 +19,11 @@
 
 class RPC{
 private:
-  enum Move{
-    ROCK,
-    PAPER,
-    SCISSORS,
-    MAX_MOVE,
+  enum Move : uint16_t{
+    ROCK = 1,
+    PAPER = 2,
+    SCISSORS = 3,
+    MAX_MOVE = 0,
   };
 
   int m_sockfd;

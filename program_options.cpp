@@ -11,30 +11,6 @@ static bool         _fileopt  { false };
 static std::string_view _file {};
 }
 
-std::string_view program_options::get_option(const std::vector<std::string_view>& args,
-                                             const std::string_view& option_name){
-  for(auto it = args.begin(), end = args.end(); it != end; ++it){
-    if(*it == option_name){
-      if(it + 1 != end){
-        return *(it + 1);
-      }
-    }
-  }
-
-  return "";
-}
-
-bool program_options::has_option(const std::vector<std::string_view>& args,
-                                 const std::string_view& option_name){
-  for(auto it = args.begin(), end = args.end(); it != end; ++it){
-    if(*it == option_name){
-      return true;
-    }
-  }
-
-  return false;
-}
-
 void program_options::parse(int argc, char* argv[]){
   if(argc > 64){
     throw std::runtime_error("too many input parameters!");

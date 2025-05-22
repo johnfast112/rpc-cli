@@ -16,6 +16,7 @@ int main(int argc, char* argv[]){
   if(program_options::server()){
     try {
       rpc.startServer();
+      rpc.s_listen();
     } catch (const std::exception &x) {
       std::cerr << x.what() << '\n';
       std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";

@@ -1,14 +1,14 @@
 #include "rpc.h"
 
-void* get_in_addr(struct sockaddr* sa){
+void* get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
   if(sa->sa_family == AF_INET){
     return &(((struct sockaddr_in*)sa)->sin_addr);
   } else {
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
+  }
 }
 
-void RPC::c_connect(){
+void RPC::c_connect(){ //client connect
   std::string text;
 
   if(program_options::fileopt()){ //Check if file specified
@@ -178,22 +178,23 @@ RPC::Move RPC::awaitMove(){ //TODO: Make this stub func
   return MAX_MOVE;
 }
 
-void RPC::startServer(){
+void RPC::startServer(){ //Run this before s_listen()
   std::string text;
 
-  if(program_options::fileopt()){
+  if(program_options::fileopt()){ //Check if file specified
     std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
     if(!file.is_open()){
       throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
     }
     std::getline(file, text);
-  } else {
+  } else { //try default file
     std::ifstream file(static_cast<std::string>("port.txt"), std::ios::in);
     if(!file.is_open()){
     }
     std::getline(file, text);
   }
 
+  //try manual input
   if(text.empty()){
     while(true){
       std::cin >> text;
