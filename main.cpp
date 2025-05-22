@@ -1,4 +1,5 @@
 #include "program_options.h"
+#include "rpc.h"
 #include <iostream>
 
 int main(int argc, char* argv[]){
@@ -9,6 +10,11 @@ int main(int argc, char* argv[]){
     std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";
     return 1;
   }
+
+  RPC rpc{};
+  rpc.getA();
+  rpc.getB();
+  rpc.print();
 
   if(program_options::online()){
     std::cout << "ONLINE\n";

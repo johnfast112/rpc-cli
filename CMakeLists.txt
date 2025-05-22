@@ -13,4 +13,5 @@ add_executable(rpc-cli)
 # source files
 target_sources(rpc-cli
   PUBLIC main.cpp
-  PUBLIC program_options.cpp)
+  PUBLIC program_options.cpp
+  PUBLIC rpc.cpp)
