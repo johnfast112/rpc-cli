@@ -1,21 +1,22 @@
 #include "rpc.h"
 
-void RPC::getConnection(){
+void RPC::c_connect(){
   std::string text;
 
-  if(program_options::fileopt()){
+  if(program_options::fileopt()){ //Check if file specified
     std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
     if(!file.is_open()){
       throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
     }
     std::getline(file, text);
-  } else {
+  } else { //Try the default
     std::ifstream file(static_cast<std::string>("server.txt"), std::ios::in);
     if(!file.is_open()){
     }
     std::getline(file, text);
   }
 
+  //Try manual input
   if(text.empty()){
     while(true){
       std::cin >> text;
@@ -27,9 +28,6 @@ void RPC::getConnection(){
       }
     }
   }
-
-  std::cout << text.substr(0, text.find(":")) << '\n';
-  std::cout << text.substr(text.find(":")+1, text.back()) << '\n';
 
   if(text.find(":") == std::string::npos){
     throw std::runtime_error("rpc-cli: Could not inperpret server address");

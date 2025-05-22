@@ -40,7 +40,7 @@ public:
   void getA();
   void getB();
 
-  void getConnection();
+  void c_connect();
   void startServer();
 
   void print();
