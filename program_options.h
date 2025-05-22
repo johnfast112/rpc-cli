@@ -17,6 +17,7 @@ bool has_option(const std::vector<std::string_view>& args,
                 const std::string_view& option_name);
 void parse(int argc, char* argv[]);
 
+bool server();
 bool online();
 bool fileopt();
 const std::string_view& file();
