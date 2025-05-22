@@ -58,7 +58,7 @@ void program_options::parse(int argc, char* argv[]){
       if(_fileopt){
         throw std::runtime_error("Cannot use -f/--file param twice!");
       }
-      if(!_online){
+      if(!_online && !_server){
         throw std::runtime_error("Cannot use -f/--file without first specifying -o/--online or -s/--server");
       }
 

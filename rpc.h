@@ -5,9 +5,13 @@
 #include <iostream>
 #include <limits>
 
+#include <arpa/inet.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+
+#include <sys/select.h>
 
 #include <unistd.h>
 
@@ -42,6 +46,7 @@ public:
 
   void c_connect();
   void startServer();
+  void s_listen();
 
   void print();
 };

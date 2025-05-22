@@ -1,5 +1,13 @@
 #include "rpc.h"
 
+void* get_in_addr(struct sockaddr* sa){
+  if(sa->sa_family == AF_INET){
+    return &(((struct sockaddr_in*)sa)->sin_addr);
+  } else {
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+}
+
 void RPC::c_connect(){
   std::string text;
 
@@ -166,7 +174,7 @@ void RPC::print(){
   std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
 }
 
-RPC::Move RPC::awaitMove(){
+RPC::Move RPC::awaitMove(){ //TODO: Make this stub func
   return MAX_MOVE;
 }
 
@@ -243,4 +251,55 @@ void RPC::startServer(){
 
   FD_SET(m_listener, &master_fds); //Add listener to our master set
   fd_max=m_listener; //Newest socket will be our largest
+}
+
+void RPC::s_listen(){
+  int newfd;
+  struct sockaddr_storage remoteaddr;
+  socklen_t addrlen;
+
+  char buf[4];
+  int nbytes;
+
+  char remoteIP[INET6_ADDRSTRLEN];
+
+  while(true){
+    read_fds = master_fds;
+    if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){
+      perror("select");
+      throw std::runtime_error("Something went wrong when polling sockets");
+    }
+
+    for(int i{0}; i<=fd_max; ++i){
+      if(FD_ISSET(i, &read_fds)){
+        if(i == m_listener){
+          addrlen = sizeof(remoteaddr);
+          newfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
+
+          if(newfd == -1){
+            perror("accept");
+          } else {
+            FD_SET(newfd, &master_fds);
+            if(fd_max<newfd){ fd_max = newfd; }
+            std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << newfd << '\n';
+          }
+        } else {
+          //handle data from our client
+          if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
+            if(nbytes == 0){
+              //connection closed
+              std::cout << " rpc-cli: server: socket " << i << " hung up\n";
+            } else {
+              perror("recv");
+            }
+            close(i);
+            FD_CLR(i, &master_fds);
+          } else {
+            //WE GOT SOME DATA
+            //TODO: Deal with real data
+          }
+        }
+      }
+    }
+  }
 }
