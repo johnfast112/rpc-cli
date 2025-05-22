@@ -1,12 +1,29 @@
 #include "rpc.h"
 
-void* get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
+void* RPC::get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
   if(sa->sa_family == AF_INET){
     return &(((struct sockaddr_in*)sa)->sin_addr);
   } else {
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
   }
 }
+
+int RPC::sendall(int s, char *buf, int *len){
+  int total = 0;        // how many bytes we've sent
+  int bytesleft = *len; // how many we have left to send
+  int n;
+
+  while(total < *len) {
+    n = send(s, buf+total, bytesleft, 0);
+    if (n == -1) { break; }
+    total += n;
+    bytesleft -= n;
+  }
+
+  *len = total; // return number actually sent here
+
+  return n==-1?-1:0; // return -1 on failure, 0 on success
+} 
 
 void RPC::c_connect(){ //client connect
   std::string text;
@@ -113,11 +130,17 @@ RPC::Move RPC::getMove(){
 
 void RPC::getA(){
   m_A=getMove();
+  if(program_options::online()){
+    char buf[2];
+    int len{sizeof(buf)};
+    reinterpret_cast<uint16_t*>(buf)[0] = htons(m_A);
+    sendall(m_sockfd, buf, &len);
+  }
 }
 
 void RPC::getB(){
   if(program_options::online()){
-    m_B=awaitMove();
+    m_B=static_cast<RPC::Move>(ntohs(awaitMove()));
   } else {
     m_B=getMove();
   }

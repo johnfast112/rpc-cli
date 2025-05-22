@@ -37,6 +37,9 @@ private:
   Move m_A{MAX_MOVE};
   Move m_B{MAX_MOVE};
 
+  void* get_in_addr(struct sockaddr*);
+  int sendall(int s, char *buf, int *len);
+
   Move getMove();
   Move awaitMove();
 
