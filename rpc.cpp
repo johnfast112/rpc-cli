@@ -197,11 +197,36 @@ void RPC::print(){
   std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
 }
 
-RPC::Move RPC::awaitMove(){ //TODO: Make this stub func
-  return MAX_MOVE;
+uint16_t RPC::awaitMove(){ //TODO: Make this stub func
+  int nbytes;
+  char buf[2];
+  fd_set server;
+  FD_ZERO(&server);
+  FD_SET(m_sockfd, &server);
+  if(select(m_sockfd+1, &server, NULL, NULL, NULL) == -1){
+    perror("select");
+    throw std::runtime_error("Something went wrong when polling sockets");
+  }
+
+  if(FD_ISSET(m_sockfd, &server)){
+    if((nbytes = recv(m_sockfd, buf, sizeof(buf), 0)) <=0){
+      if(nbytes == 0){
+        //connection closed
+        std::cout << " rpc-cli: client: socket " << m_sockfd << " hung up\n";
+      } else {
+        perror("recv");
+      }
+      close(m_sockfd);
+      throw std::runtime_error("Server closed connection");
+    }
+  }
+
+  return reinterpret_cast<uint16_t*>(buf)[0];
 }
 
 void RPC::startServer(){ //Run this before s_listen()
+  FD_ZERO(&master_fds);
+  FD_ZERO(&read_fds);
   std::string text;
 
   if(program_options::fileopt()){ //Check if file specified
@@ -321,6 +346,18 @@ void RPC::s_listen(){
           } else {
             //WE GOT SOME DATA
             //TODO: Deal with real data
+
+            for(int j{0}; j<fd_max; ++j){
+              //Send to everyone
+              if (FD_ISSET(j, &master_fds)) {
+                // except the listener and ourselves
+                if (j != m_listener && j != i) {
+                  if (sendall(j, buf, &nbytes) == -1) {
+                    perror("send");
+                  }
+                }
+              }
+            }
           }
         }
       }

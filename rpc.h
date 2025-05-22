@@ -41,7 +41,7 @@ private:
   int sendall(int s, char *buf, int *len);
 
   Move getMove();
-  Move awaitMove();
+  uint16_t awaitMove();
 
 public:
   void getA();
