@@ -173,4 +173,76 @@ RPC::Move RPC::awaitMove(){
 }
 
 void RPC::startServer(){
+  std::string text;
+
+  if(program_options::fileopt()){
+    std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
+    if(!file.is_open()){
+      throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
+    }
+    std::getline(file, text);
+  } else {
+    std::ifstream file(static_cast<std::string>("port.txt"), std::ios::in);
+    if(!file.is_open()){
+    }
+    std::getline(file, text);
+  }
+
+  if(text.empty()){
+    while(true){
+      std::cin >> text;
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+      if(std::cin.good()){
+        break;
+      }
+    }
+  }
+
+  struct addrinfo hints, *servinfo, *p;
+  int rv;
+
+  memset(&hints, 0, sizeof(hints)); //Zero out hints
+  hints.ai_family = AF_UNSPEC; //IPv4 or IPv6
+  hints.ai_socktype = SOCK_STREAM; //TCP
+  hints.ai_flags = AI_PASSIVE; //Use our own IP
+
+  if((rv = getaddrinfo(NULL, text.c_str(), &hints, &servinfo)) != 0){
+    std::cerr << "getaddrinfo: " << gai_strerror(rv) << '\n';
+    throw std::runtime_error("Unable to create server. Make sure nothing else is running on this port.");
+  }
+
+  //Loop through until we get a connection
+  for(p = servinfo; p != NULL; p = p->ai_next){
+    if((m_listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){ //Try to create socket
+      close(m_listener);
+      perror("server: socket");
+      continue;
+    }
+
+    const int yes{1};
+    setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)); // Lose that pesky address already in use message
+
+    if(bind(m_listener, p->ai_addr, p->ai_addrlen) < 0){
+      close(m_listener);
+      continue;
+    }
+
+    break;
+  }
+
+  if(p == NULL){ // Could not find an addrinfo to connect to
+    throw std::runtime_error("server: failed to bind");
+  }
+
+  freeaddrinfo(servinfo); //Done with this data
+
+  if(listen(m_listener, 10) == -1){ //Marks as listening
+    perror("listen");
+    throw std::runtime_error("Could not mark socket as listener");
+  }
+
+  FD_SET(m_listener, &master_fds); //Add listener to our master set
+  fd_max=m_listener; //Newest socket will be our largest
 }

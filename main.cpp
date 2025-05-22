@@ -13,18 +13,18 @@ int main(int argc, char* argv[]){
 
   RPC rpc{};
 
-  if(program_options::online()){
+  if(program_options::server()){
     try {
-      rpc.getConnection();
+      rpc.startServer();
     } catch (const std::exception &x) {
       std::cerr << x.what() << '\n';
       std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";
       return 1;
     }
   }
-  if(program_options::server()){
+  if(program_options::online()){
     try {
-      rpc.startServer();
+      rpc.getConnection();
     } catch (const std::exception &x) {
       std::cerr << x.what() << '\n';
       std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";

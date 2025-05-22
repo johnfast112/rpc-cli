@@ -23,6 +23,12 @@ private:
   };
 
   int m_sockfd;
+  int m_listener;
+
+  fd_set master_fds;
+  fd_set read_fds;
+
+  int fd_max;
 
   Move m_A{MAX_MOVE};
   Move m_B{MAX_MOVE};
