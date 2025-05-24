@@ -129,6 +129,16 @@ RPC::Move RPC::getMove(){
 }
 
 void RPC::getA(){
+  std::cout << "m_sockfd" << sizeof(m_sockfd) << '\n';
+  std::cout << "m_listener" << sizeof(m_listener) << '\n';
+
+  std::cout << "master_fds" << sizeof(master_fds) << '\n';
+  std::cout << "read_fds" << sizeof(read_fds) << '\n';
+
+  std::cout << "fd_max" << sizeof(fd_max) << '\n';
+
+  std::cout << "m_A" << sizeof(m_A) << '\n';
+  std::cout << "m_B" << sizeof(m_B) << '\n';
   m_A=getMove();
   if(program_options::online()){
     char buf[2];
@@ -310,6 +320,9 @@ void RPC::s_listen(){
   char buf[4];
   int nbytes;
 
+  uint16_t mA{0};
+  uint16_t mB{0};
+
   char remoteIP[INET6_ADDRSTRLEN];
 
   while(true){
@@ -344,16 +357,24 @@ void RPC::s_listen(){
             close(i);
             FD_CLR(i, &master_fds);
           } else {
-            //WE GOT SOME DATA
-            //TODO: Deal with real data
-
-            for(int j{0}; j<fd_max; ++j){
-              //Send to everyone
-              if (FD_ISSET(j, &master_fds)) {
-                // except the listener and ourselves
-                if (j != m_listener && j != i) {
-                  if (sendall(j, buf, &nbytes) == -1) {
-                    perror("send");
+            if(mA == 0){
+              mA = reinterpret_cast<uint16_t*>(buf)[0];
+            } else if(mB == 0){
+              mB = reinterpret_cast<uint16_t*>(buf)[0];
+              for(int j{0}; j<fd_max; ++j){
+                //Send to everyone
+                if (FD_ISSET(j, &master_fds)) {
+                  // except the listener and ourselves
+                  if (j != m_listener && j != i) {
+                    reinterpret_cast<uint16_t*>(buf)[0] = mB;
+                    if (sendall(j, buf, &nbytes) == -1) {
+                      perror("send");
+                    }
+                  } else if(j != m_listener){
+                    reinterpret_cast<uint16_t*>(buf)[0] = mA;
+                    if (sendall(j, buf, &nbytes) == -1) {
+                      perror("send");
+                    }
                   }
                 }
               }

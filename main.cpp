@@ -37,5 +37,7 @@ int main(int argc, char* argv[]){
   rpc.getB();
   rpc.print();
 
+  std::cout << sizeof(RPC);
+
   return 0;
 }
