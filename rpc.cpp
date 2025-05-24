@@ -13,22 +13,33 @@ void* RPC::get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
   }
 }
 
-//int RPC::sendall(int s, char *buf, int *len){
-//  int total = 0;        // how many bytes we've sent
-//  int bytesleft = *len; // how many we have left to send
-//  int n;
-//
-//  while(total < *len) {
-//    n = send(s, buf+total, bytesleft, 0);
-//    if (n == -1) { break; }
-//    total += n;
-//    bytesleft -= n;
-//  }
-//
-//  *len = total; // return number actually sent here
-//
-//  return n==-1?-1:0; // return -1 on failure, 0 on success
-//} 
+RPC::Move RPC::getMove(){
+  char c;
+
+  while(true){
+  std::cout << "What\'s Your Move? (1/2/3)\n";
+  std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+
+    std::cin >> c;
+    std::cout << "\x1b[A\b \b";
+    std::cin.clear();
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    if(std::cin.good()){ //Try until we have good data
+      switch(c){
+        case '1':
+          return ROCK;
+          break;
+        case '2':
+          return PAPER;
+          break;
+        case '3':
+          return SCISSORS;
+          break;
+      }
+    }
+  }
+}
 
 void RPC::parseINI(){
   std::string line;
@@ -137,6 +148,138 @@ void RPC::broadcast(){
   std::cout << "_port: " << _port << '\n';
 }
 
+void RPC::connect(){
+  std::string line;
+
+  try{
+    RPC::parseINI();
+  } catch (const std::exception& e){
+    std::cerr << e.what() << '\n';
+    //try manual input
+    if(!program_options::fileopt()){
+      while(true){
+        std::cout << "Server: ";
+        std::cin >> line;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if(std::cin.good()){ //Try to get input until it is good
+          break;
+        }
+      }
+
+      _server = line;
+      while(true){
+        std::cout << "Port: ";
+        std::cin >> line;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if(std::cin.good()){ //Try to get input until it is good
+          break;
+        }
+      }
+
+      _port = line;
+    }
+  }
+
+  std::cout << "_server: " << _server << '\n';
+  std::cout << "_port: " << _port << '\n';
+}
+
+void RPC::run(){
+  m_p1 = RPC::getMove();
+  m_p2 = RPC::getMove();
+}
+
+void RPC::print(){
+  if(m_p1 == MAX_MOVE || m_p2 == MAX_MOVE){
+    std::cout << "A Player Has Yet To Make Their Move\n";
+    return;
+  }
+
+  std::cout << "Player 1: ";
+  switch(m_p1){
+    case ROCK: std::cout << "ROCK"; break;
+    case PAPER: std::cout << "PAPER"; break;
+    case SCISSORS: std::cout << "SCISSORS"; break;
+  }
+  std::cout << '\n';
+
+  std::cout << "Player 2: ";
+  switch(m_p2){
+    case ROCK: std::cout << "ROCK"; break;
+    case PAPER: std::cout << "PAPER"; break;
+    case SCISSORS: std::cout << "SCISSORS"; break;
+  }
+  std::cout << '\n';
+
+  if(m_p1 == m_p2){
+    std::cout << "TIE!\n";
+    return;
+  }
+
+  bool p1;
+  switch(m_p1){
+    case ROCK:
+      switch(m_p2){
+        case PAPER:
+          p1=false;
+          break;
+        case SCISSORS:
+          p1=true;
+          break;
+      }
+      break;
+    case PAPER:
+      switch(m_p2){
+        case ROCK:
+          p1=true;
+          break;
+        case SCISSORS:
+          p1=false;
+          break;
+      }
+      break;
+    case SCISSORS:
+      switch(m_p2){
+        case PAPER:
+          p1=true;
+          break;
+        case ROCK:
+          p1=false;
+          break;
+      }
+      break;
+    default:
+      std::cerr << "WE SHOULDN'T BE HERE AAAH!\n"; //TODO: Should I even deal with this?
+      return;
+  }
+
+  std::cout << "The Winner Is: " << ( (program_options::connect() || program_options::broadcast()) ? (p1 ? "YOU" : "ENEMY" ) : (p1 ? "Player 1" : "Player 2") ) << '\n';
+}
+
+//int RPC::sendall(int s, char *buf, int *len){
+//  int total = 0;        // how many bytes we've sent
+//  int bytesleft = *len; // how many we have left to send
+//  int n;
+//
+//  while(total < *len) {
+//    n = send(s, buf+total, bytesleft, 0);
+//    if (n == -1) { break; }
+//    total += n;
+//    bytesleft -= n;
+//  }
+//
+//  *len = total; // return number actually sent here
+//
+//  return n==-1?-1:0; // return -1 on failure, 0 on success
+//} 
+
+
+
+
 //  struct addrinfo hints, *servinfo, *p;
 //  int rv;
 //
@@ -183,45 +326,6 @@ void RPC::broadcast(){
 //  FD_SET(m_listener, &master_fds); //Add listener to our master set
 //  fd_max=m_listener; //Newest socket will be our largest
 
-void RPC::connect(){
-  std::string line;
-
-  try{
-    RPC::parseINI();
-  } catch (const std::exception& e){
-    std::cerr << e.what() << '\n';
-    //try manual input
-    if(!program_options::fileopt()){
-      while(true){
-        std::cout << "Server: ";
-        std::cin >> line;
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        if(std::cin.good()){ //Try to get input until it is good
-          break;
-        }
-      }
-
-      _server = line;
-      while(true){
-        std::cout << "Port: ";
-        std::cin >> line;
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        if(std::cin.good()){ //Try to get input until it is good
-          break;
-        }
-      }
-
-      _port = line;
-    }
-  }
-
-  std::cout << "_server: " << _server << '\n';
-  std::cout << "_port: " << _port << '\n';
-}
 
 //void RPC::connect(){ //client connect
 //  std::string text;
@@ -296,35 +400,6 @@ void RPC::connect(){
 //
 //}
 
-RPC::Move RPC::getMove(){
-  std::cout << "What\'s Your Move? (1/2/3)\n";
-  std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
-
-  char c;
-  while(true){
-    std::cin >> c;
-    std::cin.clear();
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    if(std::cin.good()){
-      break;
-    }
-  }
-
-  switch(c){
-    case '1':
-      return ROCK;
-      break;
-    case '2':
-      return PAPER;
-      break;
-    case '3':
-      return SCISSORS;
-      break;
-    default:
-      return MAX_MOVE;
-  }
-}
 
 //void RPC::getA(){
 //  std::cout << "m_sockfd" << sizeof(m_sockfd) << '\n';
@@ -354,56 +429,6 @@ RPC::Move RPC::getMove(){
 //  }
 //}
 
-void RPC::print(){
-  if(m_A == MAX_MOVE || m_B == MAX_MOVE){
-    std::cout << "A Player Has Yet To Make Their Move\n";
-    return;
-  }
-
-  if(m_A == m_B){
-    std::cout << "TIE!\n";
-    return;
-  }
-
-  bool aWins;
-  switch(m_A){
-    case ROCK:
-      switch(m_B){
-        case PAPER:
-          aWins=false;
-          break;
-        case SCISSORS:
-          aWins=true;
-          break;
-      }
-      break;
-    case PAPER:
-      switch(m_B){
-        case ROCK:
-          aWins=true;
-          break;
-        case SCISSORS:
-          aWins=false;
-          break;
-      }
-      break;
-    case SCISSORS:
-      switch(m_B){
-        case PAPER:
-          aWins=true;
-          break;
-        case ROCK:
-          aWins=false;
-          break;
-      }
-      break;
-    default:
-      std::cerr << "WE SHOULDN'T BE HERE AAAH!\n"; //TODO: Should I even deal with this?
-      return;
-  }
-
-  std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
-}
 
 //uint16_t RPC::awaitMove(){ //TODO: Make this stub func
 //  int nbytes;

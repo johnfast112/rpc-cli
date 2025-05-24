@@ -32,7 +32,15 @@ int main(int argc, char* argv[]){
     }
   }
 
-  std::cout << sizeof(std::string_view) << '\n';
+  try {
+    rpc.run();
+  } catch (const std::exception& x) {
+    std::cerr << x.what() << '\n';
+    std::cerr << "usage: rpc-cli [-c|--connect] [-b|--broadcast] [-f|--file [file]]\n";
+    return 1;
+  }
+
+  rpc.print();
 
   return 0;
 }

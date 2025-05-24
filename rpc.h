@@ -12,7 +12,7 @@
 #include <netdb.h>
 
 class RPC{
-private:
+public:
   enum Move : uint16_t{
     ROCK = 1,
     PAPER = 2,
@@ -20,6 +20,7 @@ private:
     MAX_MOVE = 0,
   };
 
+private:
   enum State{
     DEFAULT,
     SECTION,
@@ -30,8 +31,8 @@ private:
 
   int m_sockfd;
 
-  Move m_A{MAX_MOVE};
-  Move m_B{MAX_MOVE};
+  Move m_p1{MAX_MOVE};
+  Move m_p2{MAX_MOVE};
 
   void* get_in_addr(struct sockaddr*);
 
@@ -42,8 +43,8 @@ private:
 public:
   void broadcast();
   void connect();
-  //void startServer();
-  //void s_listen();
+
+  void run();
 
   void print();
 };
