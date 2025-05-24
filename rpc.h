@@ -1,6 +1,9 @@
 #ifndef RPC_H
 #define RPC_H
 
+#define PLAYER1 0
+#define PLAYER2 1
+
 #include "program_options.h"
 
 #include <iostream>
@@ -36,7 +39,7 @@ private:
 
   void* get_in_addr(struct sockaddr*);
 
-  Move getMove();
+  Move getMove(bool);
 
   void parseINI();
 

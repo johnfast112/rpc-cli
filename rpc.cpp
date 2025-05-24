@@ -13,11 +13,11 @@ void* RPC::get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
   }
 }
 
-RPC::Move RPC::getMove(){
+RPC::Move RPC::getMove(bool p){
   char c;
 
   while(true){
-  std::cout << "What\'s Your Move? (1/2/3)\n";
+  std::cout << "What\'s Your Move Player " << (p ? "2" : "1" ) << "? (1/2/3)\n";
   std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
 
     std::cin >> c;
@@ -189,8 +189,8 @@ void RPC::connect(){
 }
 
 void RPC::run(){
-  m_p1 = RPC::getMove();
-  m_p2 = RPC::getMove();
+  m_p1 = RPC::getMove(PLAYER1);
+  m_p2 = RPC::getMove(PLAYER2);
 }
 
 void RPC::print(){
