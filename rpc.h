@@ -27,7 +27,7 @@ private:
     VALUE,
     COMMENT,
   };
-  
+
   int m_sockfd;
 
   Move m_A{MAX_MOVE};

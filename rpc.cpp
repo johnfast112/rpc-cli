@@ -1,8 +1,8 @@
 #include "rpc.h"
 
 namespace {
-static std::string_view _server;
-static std::string_view _port;
+static std::string _server;
+static std::string _port;
 }
 
 void* RPC::get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
@@ -69,7 +69,10 @@ void RPC::parseINI(){
           value += i; break;
         case SECTION:
           if(i == ']'){ state = COMMENT; break; } //I really don't feel like making sure you've got a REALLY good ini file
+          section += i;
           break;
+        case COMMENT:
+        default: break;
       }
     }
 
@@ -80,7 +83,25 @@ void RPC::parseINI(){
       continue;
     }
 
-    //TODO: Actually parse the keys and sections
+    if(program_options::broadcast()){
+      if(section == "broadcast" && !key.empty() && !value.empty()){
+        if(key == "port"){
+          _port = value;
+          return; //Broadcast just needs the port
+        }
+      }
+    }
+
+    if(program_options::connect()){
+      if(section == "connect" && !key.empty() && !value.empty()){
+        if(key == "server" && _server.empty()){
+          _server = value;
+        }
+        if(key == "port" && _port.empty()){
+          _port = value;
+        }
+      }
+    } //No return means we'll just run through the end of the file but it's the user's fault for filling it with 65535 newlines
 
     state = DEFAULT;
     key.clear();
@@ -94,13 +115,12 @@ void RPC::broadcast(){
   try{
     RPC::parseINI();
   } catch (const std::exception& e){
-    std::cout << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     //try manual input
     if(!program_options::fileopt()){
       while(true){
         std::cout << "Port: ";
         std::cin >> line;
-        std::cout << "line: " << line << '\n'; //TODO: Remove this
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
@@ -113,6 +133,8 @@ void RPC::broadcast(){
     }
   }
 
+  std::cout << "_server: " << _server << '\n';
+  std::cout << "_port: " << _port << '\n';
 }
 
 //  struct addrinfo hints, *servinfo, *p;
@@ -162,6 +184,43 @@ void RPC::broadcast(){
 //  fd_max=m_listener; //Newest socket will be our largest
 
 void RPC::connect(){
+  std::string line;
+
+  try{
+    RPC::parseINI();
+  } catch (const std::exception& e){
+    std::cerr << e.what() << '\n';
+    //try manual input
+    if(!program_options::fileopt()){
+      while(true){
+        std::cout << "Server: ";
+        std::cin >> line;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if(std::cin.good()){ //Try to get input until it is good
+          break;
+        }
+      }
+
+      _server = line;
+      while(true){
+        std::cout << "Port: ";
+        std::cin >> line;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if(std::cin.good()){ //Try to get input until it is good
+          break;
+        }
+      }
+
+      _port = line;
+    }
+  }
+
+  std::cout << "_server: " << _server << '\n';
+  std::cout << "_port: " << _port << '\n';
 }
 
 //void RPC::connect(){ //client connect
