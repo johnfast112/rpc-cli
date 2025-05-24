@@ -5,8 +5,8 @@
 //https://medium.com/@mostsignificant/3-ways-to-parse-command-line-arguments-in-c-quick-do-it-yourself-or-comprehensive-36913284460f
 
 namespace {
-static bool         _server   { false };
-static bool         _online   { false };
+static bool         _broadcast{ false };
+static bool         _connect  { false };
 static bool         _fileopt  { false };
 static std::string_view _file {};
 }
@@ -19,14 +19,25 @@ void program_options::parse(int argc, char* argv[]){
   const std::vector<std::string_view> args(argv, argv + argc);
 
   for(auto arg = args.begin(), end = args.end(); arg != end; ++arg){
-    if(*arg == "-o" || *arg == "--online"){
-      if(_online){
-        throw std::runtime_error("Cannot use -o/--online param twice!");
+    if(*arg == "-c" || *arg == "--connect"){
+      if(_connect){
+        throw std::runtime_error("Cannot use -c/--connect option twice!");
       }
-      if(_server){
-        throw std::runtime_error("Cannot use -o/--online with -s/--server");
+      if(_broadcast){
+        throw std::runtime_error("Cannot use -c/--connect option with -b/--broadcast");
       }
-      _online = true;
+      _connect = true;
+      continue;
+    }
+
+    if(*arg == "-b" || *arg == "--broadcast"){
+      if(_broadcast){
+        throw std::runtime_error("Cannot use -b/--broadcast connect twice!");
+      }
+      if(_connect){
+        throw std::runtime_error("Cannot use -b/--broadcast option with -c/--connect");
+      }
+      _broadcast = true;
       continue;
     }
 
@@ -34,8 +45,8 @@ void program_options::parse(int argc, char* argv[]){
       if(_fileopt){
         throw std::runtime_error("Cannot use -f/--file param twice!");
       }
-      if(!_online && !_server){
-        throw std::runtime_error("Cannot use -f/--file without first specifying -o/--online or -s/--server");
+      if(!_broadcast && !_connect){
+        throw std::runtime_error("Cannot use -f/--file without first specifying -c/--connect or -b/--broadcast");
       }
 
       if(arg + 1 != end){
@@ -43,30 +54,16 @@ void program_options::parse(int argc, char* argv[]){
         _file = *(arg + 1);
         continue;
       }
-      throw std::runtime_error("Option -f/--file needs an argument!");
     }
-
-    if(*arg == "-s" || *arg == "--server"){
-      if(_server){
-        throw std::runtime_error("Cannot use -s/--server param twice!");
-      }
-      if(_online){
-        throw std::runtime_error("Cannot use -s/--server with -o/--online");
-      }
-      _server = true;
-      continue;
-    }
-
   }
-
 }
 
-bool program_options::server(){
-  return _server;
+bool program_options::broadcast(){
+  return _broadcast;
 }
 
-bool program_options::online(){
-  return _online;
+bool program_options::connect(){
+  return _connect;
 }
 
 bool program_options::fileopt(){

@@ -2,20 +2,14 @@
 #define RPC_H
 
 #include "program_options.h"
+
 #include <iostream>
 #include <limits>
-
-#include <arpa/inet.h>
+#include <stdint.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-
-#include <sys/select.h>
-
-#include <unistd.h>
-
-#include <cstring> // For memset
 
 class RPC{
 private:
@@ -26,30 +20,30 @@ private:
     MAX_MOVE = 0,
   };
 
+  enum State{
+    DEFAULT,
+    SECTION,
+    KEY,
+    VALUE,
+    COMMENT,
+  };
+  
   int m_sockfd;
-  int m_listener;
-
-  fd_set master_fds;
-  fd_set read_fds;
-
-  int fd_max;
 
   Move m_A{MAX_MOVE};
   Move m_B{MAX_MOVE};
 
   void* get_in_addr(struct sockaddr*);
-  int sendall(int s, char *buf, int *len);
 
   Move getMove();
-  uint16_t awaitMove();
+
+  void parseINI();
 
 public:
-  void getA();
-  void getB();
-
-  void c_connect();
-  void startServer();
-  void s_listen();
+  void broadcast();
+  void connect();
+  //void startServer();
+  //void s_listen();
 
   void print();
 };

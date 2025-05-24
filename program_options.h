@@ -13,8 +13,8 @@
 namespace program_options{
 void parse(int argc, char* argv[]);
 
-bool server();
-bool online();
+bool broadcast();
+bool connect();
 bool fileopt();
 const std::string_view& file();
 }; //namespace program_options
