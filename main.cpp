@@ -32,13 +32,7 @@ int main(int argc, char* argv[]){
     }
   }
 
-  try {
-    rpc.run();
-  } catch (const std::exception& x) {
-    std::cerr << x.what() << '\n';
-    std::cerr << "usage: rpc-cli [-c|--connect] [-b|--broadcast] [-f|--file [file]]\n";
-    return 1;
-  }
+  rpc.run();
 
   rpc.print();
 

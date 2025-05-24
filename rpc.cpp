@@ -17,8 +17,8 @@ RPC::Move RPC::getMove(bool p){
   char c;
 
   while(true){
-  std::cout << "What\'s Your Move Player " << (p ? "2" : "1" ) << "? (1/2/3)\n";
-  std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+    std::cout << "What\'s Your Move Player " << (p ? "2" : "1" ) << "? (1/2/3)\n";
+    std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
 
     std::cin >> c;
     std::cout << "\x1b[A\b \b";
@@ -121,8 +121,11 @@ void RPC::parseINI(){
 }
 
 void RPC::broadcast(){
+  FD_ZERO(&master_fds);
+  FD_SET(STDIN, &master_fds);
   std::string line;
 
+  //Get our port
   try{
     RPC::parseINI();
   } catch (const std::exception& e){
@@ -146,6 +149,51 @@ void RPC::broadcast(){
 
   std::cout << "_server: " << _server << '\n';
   std::cout << "_port: " << _port << '\n';
+
+  //Actually setup server
+  int rv;
+  struct addrinfo hints, *ai, *p;
+
+  memset(&hints, 0, sizeof(hints)); //Zero out hints
+  hints.ai_family = AF_UNSPEC; // IPv4 or IPv6
+  hints.ai_socktype = SOCK_STREAM; // TCP
+  hints.ai_flags = AI_PASSIVE; // Fill with my own IP on NULL ip
+
+  if((rv = getaddrinfo(NULL, _port.c_str(), &hints, &ai)) != 0){
+    throw std::runtime_error("server: " + static_cast<std::string>(gai_strerror(rv)));
+  }
+
+  for(p = ai; p != NULL; p = p->ai_next) { // Iterate until we can create socket
+    if((m_listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+      perror("server: socket");
+      continue;
+    }
+
+    const int yes{1}; //Needs const *void
+    // lose the pesky "address already in use" error message
+    setsockopt(m_listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+    if(bind(m_listener, p->ai_addr, p->ai_addrlen) < 0) {
+      close(m_listener);
+      continue;
+    }
+
+    break;
+  }
+
+  if(p == NULL){
+    throw std::runtime_error("Server: failed to bind");
+  }
+
+  freeaddrinfo(ai);
+
+  if(listen(m_listener, 10) == -1){ //Marks as listening
+    perror("listen");
+    throw std::runtime_error("TODO: Make this a more explicit exception");
+  }
+
+  FD_SET(m_listener, &master_fds); // Add listener to our set
+  fd_max=m_listener; //Newest socket is largest
 }
 
 void RPC::connect(){
@@ -189,8 +237,66 @@ void RPC::connect(){
 }
 
 void RPC::run(){
-  m_p1 = RPC::getMove(PLAYER1);
-  m_p2 = RPC::getMove(PLAYER2);
+  if(!program_options::broadcast() && !program_options::connect()){ //Normie stuff
+    m_p1 = RPC::getMove(PLAYER1);
+    m_p2 = RPC::getMove(PLAYER2);
+    return;
+  }
+
+  if(program_options::broadcast()){ //Host
+    while(true){
+      read_fds = master_fds;
+      if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){ //Poll our sockets
+        perror("select");
+        throw std::runtime_error("Something went wrong when polling sockets");
+      }
+
+      for(int i{0}; i<=fd_max; ++i){ //Check each socket
+        if(FD_ISSET(i, &read_fds)){
+          if(i == m_listener){ //New connection
+            struct sockaddr_storage remoteaddr; //Local variables that are probably used once. TODO: Double check this if something goes wrong
+            socklen_t addrlen = sizeof(remoteaddr);
+            char remoteIP[INET6_ADDRSTRLEN];
+
+            m_oppfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
+
+            if(m_oppfd == -1){
+              perror("accept");
+            } else {
+              FD_SET(m_oppfd, &master_fds); //Add our fd
+              if(fd_max<m_oppfd){ fd_max = m_oppfd; }
+              std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << m_oppfd << '\n';
+            }
+          } else { //Normie data
+            if(i == STDIN){ //TODO: Actually deal with normie data. Might have to muck around with getMove() or make a new func
+              std::cout << "STDIN\n";
+              std::string overflow;
+              std::cin >> overflow;
+            }
+            if(i == m_oppfd){ //Opponent data
+              std::cout << "OPP\n";
+              char buf[2];
+              int nbytes;
+              if((nbytes = recv(m_oppfd, buf, sizeof(buf), 0)) <=0){ //Recieve data
+                if(nbytes == 0){
+                  //Connection closed
+                  std::cout << " rpc-cli: client: socket " << m_oppfd << " hung up\n";
+                } else {
+                  //Error with recv
+                  perror("recv");
+                }
+                //Close the socket anyway and exit
+                close(m_oppfd);
+                throw std::runtime_error("Opponent closed connection");
+              }
+
+              //TODO: Deal with the data
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 void RPC::print(){
@@ -442,16 +548,6 @@ void RPC::print(){
 //  }
 //
 //  if(FD_ISSET(m_sockfd, &server)){
-//    if((nbytes = recv(m_sockfd, buf, sizeof(buf), 0)) <=0){
-//      if(nbytes == 0){
-//        //connection closed
-//        std::cout << " rpc-cli: client: socket " << m_sockfd << " hung up\n";
-//      } else {
-//        perror("recv");
-//      }
-//      close(m_sockfd);
-//      throw std::runtime_error("Server closed connection");
-//    }
 //  }
 //
 //  return reinterpret_cast<uint16_t*>(buf)[0];
@@ -473,63 +569,6 @@ void RPC::print(){
 //
 //  char remoteIP[INET6_ADDRSTRLEN];
 //
-//  while(true){
-//    read_fds = master_fds;
-//    if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){
-//      perror("select");
-//      throw std::runtime_error("Something went wrong when polling sockets");
-//    }
-//
-//    for(int i{0}; i<=fd_max; ++i){
-//      if(FD_ISSET(i, &read_fds)){
-//        if(i == m_listener){
-//          addrlen = sizeof(remoteaddr);
-//          newfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
-//
-//          if(newfd == -1){
-//            perror("accept");
-//          } else {
-//            FD_SET(newfd, &master_fds);
-//            if(fd_max<newfd){ fd_max = newfd; }
-//            std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << newfd << '\n';
-//          }
-//        } else {
-//          //handle data from our client
-//          if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
-//            if(nbytes == 0){
-//              //connection closed
-//              std::cout << " rpc-cli: server: socket " << i << " hung up\n";
-//            } else {
-//              perror("recv");
-//            }
-//            close(i);
-//            FD_CLR(i, &master_fds);
-//          } else {
-//            if(mA == 0){
-//              mA = reinterpret_cast<uint16_t*>(buf)[0];
-//            } else if(mB == 0){
-//              mB = reinterpret_cast<uint16_t*>(buf)[0];
-//              for(int j{0}; j<fd_max; ++j){
-//                //Send to everyone
-//                if (FD_ISSET(j, &master_fds)) {
-//                  // except the listener and ourselves
-//                  if (j != m_listener && j != i) {
-//                    reinterpret_cast<uint16_t*>(buf)[0] = mB;
-//                    if (sendall(j, buf, &nbytes) == -1) {
-//                      perror("send");
-//                    }
-//                  } else if(j != m_listener){
-//                    reinterpret_cast<uint16_t*>(buf)[0] = mA;
-//                    if (sendall(j, buf, &nbytes) == -1) {
-//                      perror("send");
-//                    }
-//                  }
-//                }
-//              }
-//            }
-//          }
-//        }
-//      }
 //    }
 //  }
 //}
