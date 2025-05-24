@@ -196,7 +196,7 @@ void RPC::broadcast(){
   fd_max=m_listener; //Newest socket is largest
 }
 
-void RPC::connect(){
+void RPC::c_connect(){
   std::string line;
 
   try{
@@ -234,6 +234,42 @@ void RPC::connect(){
 
   std::cout << "_server: " << _server << '\n';
   std::cout << "_port: " << _port << '\n';
+
+  int rv;
+  struct addrinfo hints, *servinfo, *p;
+
+  memset(&hints, 0, sizeof(hints)); //Zero out hints
+  hints.ai_family = AF_UNSPEC; //IPv4 or IPv6
+  hints.ai_socktype = SOCK_STREAM; //TCP
+
+  if((rv = getaddrinfo(static_cast<std::string>(_server).c_str(), static_cast<std::string>(_port).c_str(), &hints, &servinfo)) != 0){
+    
+    throw std::runtime_error("getaddrinfo: " + static_cast<std::string>(gai_strerror(rv)) + "Unable to connect to server. Make sure you entered the address and port correctly.");
+  }
+
+  //Loop through until we get a connection
+  for(p = servinfo; p != NULL; p = p->ai_next){
+    if((m_oppfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){ //Try to create socket
+      close(m_oppfd);
+      perror("client: socket");
+      continue;
+    }
+
+    if(connect(m_oppfd, p->ai_addr, p->ai_addrlen) == -1){ //Try to connect
+      close(m_oppfd);
+      perror("client: connect");
+      throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
+    }
+
+    break;
+  }
+
+  freeaddrinfo(servinfo); //Done with this data
+
+  if(p == NULL){ // Could not find an addrinfo to connect to
+    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
+  }
+  //TODO: Rest of this
 }
 
 void RPC::run(){
@@ -245,6 +281,12 @@ void RPC::run(){
 
   if(program_options::broadcast()){ //Host
     while(true){
+      if(m_p1 == MAX_MOVE){ 
+        std::cout << "What\'s Your Move? (1/2/3)\n";
+        std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+      } else {
+        std::cout << "Waiting for opponent...\n";
+      }
       read_fds = master_fds;
       if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){ //Poll our sockets
         perror("select");
@@ -268,10 +310,32 @@ void RPC::run(){
               std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << m_oppfd << '\n';
             }
           } else { //Normie data
-            if(i == STDIN){ //TODO: Actually deal with normie data. Might have to muck around with getMove() or make a new func
-              std::cout << "STDIN\n";
-              std::string overflow;
-              std::cin >> overflow;
+            if(i == STDIN){
+              if(m_p1 != MAX_MOVE){ //Ignore if we already got our input
+                std::cout << "\x1b[A\b \b";
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+              }
+              char c;
+
+              std::cin >> c;
+              std::cout << "\x1b[A\b \b";
+              std::cin.clear();
+              std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+              if(std::cin.good()){ //Try until we have good data
+                switch(c){
+                  case '1':
+                    m_p1 = ROCK;
+                    break;
+                  case '2':
+                    m_p1 = PAPER;
+                    break;
+                  case '3':
+                    m_p1 = SCISSORS;
+                    break;
+                }
+              }
             }
             if(i == m_oppfd){ //Opponent data
               std::cout << "OPP\n";
@@ -291,6 +355,7 @@ void RPC::run(){
               }
 
               //TODO: Deal with the data
+              std::cout << ntohs(reinterpret_cast<uint16_t*>(buf)[0]) << '\n';
             }
           }
         }
@@ -469,40 +534,6 @@ void RPC::print(){
 //  auto server{ text.substr(0, text.find(":")) };
 //  auto port{ text.substr(text.find(":")+1, text.back()) };
 //
-//  struct addrinfo hints, *servinfo, *p;
-//  int rv;
-//
-//  memset(&hints, 0, sizeof(hints)); //Zero out hints
-//  hints.ai_family = AF_UNSPEC; //IPv4 or IPv6
-//  hints.ai_socktype = SOCK_STREAM; //TCP
-//
-//  if((rv = getaddrinfo(static_cast<std::string>(server).c_str(), static_cast<std::string>(port).c_str(), &hints, &servinfo)) != 0){
-//    std::cerr << "getaddrinfo: " << gai_strerror(rv) << '\n';
-//    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
-//  }
-//
-//  //Loop through until we get a connection
-//  for(p = servinfo; p != NULL; p = p->ai_next){
-//    if((m_sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){ //Try to create socket
-//      close(m_sockfd);
-//      perror("client: socket");
-//      continue;
-//    }
-//
-//    if(connect(m_sockfd, p->ai_addr, p->ai_addrlen) == -1){ //Try to connect
-//      close(m_sockfd);
-//      perror("client: connect");
-//      throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
-//    }
-//
-//    break;
-//  }
-//
-//  freeaddrinfo(servinfo); //Done with this data
-//
-//  if(p == NULL){ // Could not find an addrinfo to connect to
-//    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
-//  }
 //
 //}
 

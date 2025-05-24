@@ -59,7 +59,7 @@ private:
 
 public:
   void broadcast();
-  void connect();
+  void c_connect();
 
   void run();
 

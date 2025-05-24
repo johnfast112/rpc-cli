@@ -24,7 +24,7 @@ int main(int argc, char* argv[]){
   }
   if(program_options::connect()){
     try {
-      rpc.connect();
+      rpc.c_connect();
     } catch (const std::exception& x) {
       std::cerr << x.what() << '\n';
       std::cerr << "usage: rpc-cli [-c|--connect] [-b|--broadcast] [-f|--file [file]]\n";
