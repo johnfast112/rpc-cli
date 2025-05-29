@@ -17,6 +17,8 @@
 
 #include <cstring> // For memset
 
+constexpr int STDIN{0};
+
 class RPC{
 private:
   enum Move : uint16_t{
@@ -26,29 +28,30 @@ private:
     MAX_MOVE = 0,
   };
 
-  int m_sockfd;
-  int m_listener;
+  int m_sockfd{-1};
+  int m_listener{-1};
 
   fd_set master_fds;
   fd_set read_fds;
 
   int fd_max;
 
-  Move m_A{MAX_MOVE};
-  Move m_B{MAX_MOVE};
+  Move m_a{MAX_MOVE};
+  Move m_b{MAX_MOVE};
 
   void* get_in_addr(struct sockaddr*);
   int sendall(int s, char *buf, int *len);
 
-  Move getMove();
-  uint16_t awaitMove();
+  Move get_move();
+  void handle_fd(int i);
 
 public:
-  void getA();
-  void getB();
+  void get_a();
+  void get_b();
 
   void c_connect();
-  void startServer();
+  void c_run();
+  void s_init();
   void s_listen();
 
   void print();

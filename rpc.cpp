@@ -26,6 +26,10 @@ int RPC::sendall(int s, char *buf, int *len){
 } 
 
 void RPC::c_connect(){ //client connect
+  FD_ZERO(&master_fds);
+  FD_ZERO(&read_fds);
+  FD_SET(STDIN, &master_fds);
+  fd_max = STDIN;
   std::string text;
 
   if(program_options::fileopt()){ //Check if file specified
@@ -44,6 +48,7 @@ void RPC::c_connect(){ //client connect
   //Try manual input
   if(text.empty()){
     while(true){
+      std::cout << "Server address and port [address:port]: ";
       std::cin >> text;
       std::cin.clear();
       std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -96,11 +101,38 @@ void RPC::c_connect(){ //client connect
     throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
   }
 
+  FD_SET(m_sockfd, &master_fds);
+  if(fd_max<m_sockfd){ fd_max = m_sockfd; }
 }
 
-RPC::Move RPC::getMove(){
-  std::cout << "What\'s Your Move? (1/2/3)\n";
-  std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+void RPC::c_run(){
+  while(true){
+    if(m_a == -1){
+      std::cout << "What\'s Your Move? (1/2/3)\n";
+      std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+    } else {
+      std::cout << "Awaiting opponent...\n";
+    }
+
+    read_fds = master_fds;
+    if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){
+      perror("select");
+      throw std::runtime_error("Something went wrong when polling sockets");
+    }
+
+    for(int i{0}; i<=fd_max; ++i){
+      if(FD_ISSET(i, &read_fds)){
+        handle_fd(i);
+      }
+    }
+  }
+}
+
+RPC::Move RPC::get_move(){
+  if(!program_options::online()){
+    std::cout << "What\'s Your Move? (1/2/3)\n";
+    std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+  }
 
   char c;
   while(true){
@@ -128,49 +160,36 @@ RPC::Move RPC::getMove(){
   }
 }
 
-void RPC::getA(){
-  std::cout << "m_sockfd" << sizeof(m_sockfd) << '\n';
-  std::cout << "m_listener" << sizeof(m_listener) << '\n';
+void RPC::get_a(){
+  m_a=get_move();
 
-  std::cout << "master_fds" << sizeof(master_fds) << '\n';
-  std::cout << "read_fds" << sizeof(read_fds) << '\n';
-
-  std::cout << "fd_max" << sizeof(fd_max) << '\n';
-
-  std::cout << "m_A" << sizeof(m_A) << '\n';
-  std::cout << "m_B" << sizeof(m_B) << '\n';
-  m_A=getMove();
-  if(program_options::online()){
+  if(program_options::online() || program_options::server()){
     char buf[2];
     int len{sizeof(buf)};
-    reinterpret_cast<uint16_t*>(buf)[0] = htons(m_A);
+    reinterpret_cast<uint16_t*>(buf)[0] = htons(m_a);
     sendall(m_sockfd, buf, &len);
   }
 }
 
-void RPC::getB(){
-  if(program_options::online()){
-    m_B=static_cast<RPC::Move>(ntohs(awaitMove()));
-  } else {
-    m_B=getMove();
-  }
+void RPC::get_b(){
+  m_b=get_move();
 }
 
 void RPC::print(){
-  if(m_A == MAX_MOVE || m_B == MAX_MOVE){
+  if(m_a == MAX_MOVE || m_b == MAX_MOVE){
     std::cout << "A Player Has Yet To Make Their Move\n";
     return;
   }
 
-  if(m_A == m_B){
+  if(m_a == m_b){
     std::cout << "TIE!\n";
     return;
   }
 
   bool aWins;
-  switch(m_A){
+  switch(m_a){
     case ROCK:
-      switch(m_B){
+      switch(m_b){
         case PAPER:
           aWins=false;
           break;
@@ -180,7 +199,7 @@ void RPC::print(){
       }
       break;
     case PAPER:
-      switch(m_B){
+      switch(m_b){
         case ROCK:
           aWins=true;
           break;
@@ -190,7 +209,7 @@ void RPC::print(){
       }
       break;
     case SCISSORS:
-      switch(m_B){
+      switch(m_b){
         case PAPER:
           aWins=true;
           break;
@@ -207,34 +226,7 @@ void RPC::print(){
   std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
 }
 
-uint16_t RPC::awaitMove(){ //TODO: Make this stub func
-  int nbytes;
-  char buf[2];
-  fd_set server;
-  FD_ZERO(&server);
-  FD_SET(m_sockfd, &server);
-  if(select(m_sockfd+1, &server, NULL, NULL, NULL) == -1){
-    perror("select");
-    throw std::runtime_error("Something went wrong when polling sockets");
-  }
-
-  if(FD_ISSET(m_sockfd, &server)){
-    if((nbytes = recv(m_sockfd, buf, sizeof(buf), 0)) <=0){
-      if(nbytes == 0){
-        //connection closed
-        std::cout << " rpc-cli: client: socket " << m_sockfd << " hung up\n";
-      } else {
-        perror("recv");
-      }
-      close(m_sockfd);
-      throw std::runtime_error("Server closed connection");
-    }
-  }
-
-  return reinterpret_cast<uint16_t*>(buf)[0];
-}
-
-void RPC::startServer(){ //Run this before s_listen()
+void RPC::s_init(){ //Run this before s_listen()
   FD_ZERO(&master_fds);
   FD_ZERO(&read_fds);
   std::string text;
@@ -312,20 +304,71 @@ void RPC::startServer(){ //Run this before s_listen()
   fd_max=m_listener; //Newest socket will be our largest
 }
 
+void RPC::handle_fd(int i){
+  //unfortunately cannot use switches on non-constexpr 
+  if(i == m_listener){ //accept connection
+    if(m_sockfd != -1){
+      std::cerr << "A new client tried to connect but we already have an opponent\n";
+      return;
+    }
+
+    char remoteIP[INET6_ADDRSTRLEN];
+    struct sockaddr_storage remoteaddr;
+    socklen_t addrlen = sizeof(remoteaddr);
+
+    m_sockfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
+
+    if(m_sockfd == -1){
+      perror("accept");
+      close(m_sockfd);
+    } else {
+      FD_SET(m_sockfd, &master_fds);
+      if(fd_max<m_sockfd){ fd_max = m_sockfd; }
+      std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << m_sockfd << '\n';
+    }
+    return;
+  }
+
+  if(i == m_sockfd){ //handle data from opponent
+    int nbytes;
+    char buf[2];
+    if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
+      //recv
+      if(nbytes == 0){
+        //connection closed
+        std::cout << " rpc-cli: server: socket " << i << " hung up\n";
+      } else {
+        perror("recv");
+      }
+      close(i);
+      FD_CLR(i, &master_fds);
+      std::string err{"rpc-cli: server: socket " + i};
+      err += " hung up";
+      throw std::runtime_error(err);
+      return;
+    } 
+
+    m_b = static_cast<Move>(ntohs(*reinterpret_cast<int16_t*>(buf)));
+    return;
+  }
+
+  if(i == STDIN){ //handle user input
+    get_a();
+    return;
+  }
+
+  return;
+}
+
 void RPC::s_listen(){
-  int newfd;
-  struct sockaddr_storage remoteaddr;
-  socklen_t addrlen;
-
-  char buf[4];
-  int nbytes;
-
-  uint16_t mA{0};
-  uint16_t mB{0};
-
-  char remoteIP[INET6_ADDRSTRLEN];
-
   while(true){
+    if(m_a == -1){
+      std::cout << "What\'s Your Move? (1/2/3)\n";
+      std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
+    } else {
+      std::cout << "Awaiting opponent...\n";
+    }
+
     read_fds = master_fds;
     if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){
       perror("select");
@@ -334,53 +377,7 @@ void RPC::s_listen(){
 
     for(int i{0}; i<=fd_max; ++i){
       if(FD_ISSET(i, &read_fds)){
-        if(i == m_listener){
-          addrlen = sizeof(remoteaddr);
-          newfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
-
-          if(newfd == -1){
-            perror("accept");
-          } else {
-            FD_SET(newfd, &master_fds);
-            if(fd_max<newfd){ fd_max = newfd; }
-            std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << newfd << '\n';
-          }
-        } else {
-          //handle data from our client
-          if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
-            if(nbytes == 0){
-              //connection closed
-              std::cout << " rpc-cli: server: socket " << i << " hung up\n";
-            } else {
-              perror("recv");
-            }
-            close(i);
-            FD_CLR(i, &master_fds);
-          } else {
-            if(mA == 0){
-              mA = reinterpret_cast<uint16_t*>(buf)[0];
-            } else if(mB == 0){
-              mB = reinterpret_cast<uint16_t*>(buf)[0];
-              for(int j{0}; j<fd_max; ++j){
-                //Send to everyone
-                if (FD_ISSET(j, &master_fds)) {
-                  // except the listener and ourselves
-                  if (j != m_listener && j != i) {
-                    reinterpret_cast<uint16_t*>(buf)[0] = mB;
-                    if (sendall(j, buf, &nbytes) == -1) {
-                      perror("send");
-                    }
-                  } else if(j != m_listener){
-                    reinterpret_cast<uint16_t*>(buf)[0] = mA;
-                    if (sendall(j, buf, &nbytes) == -1) {
-                      perror("send");
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        handle_fd(i);
       }
     }
   }
