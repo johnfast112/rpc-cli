@@ -1,6 +1,7 @@
 #include "rpc.h"
 
-void* RPC::get_in_addr(struct sockaddr* sa){ //get sockaddr, IPv4 or IPv6
+//get sockaddr, IPv4 or IPv6
+void* RPC::get_in_addr(struct sockaddr* sa){ 
   if(sa->sa_family == AF_INET){
     return &(((struct sockaddr_in*)sa)->sin_addr);
   } else {
@@ -22,28 +23,39 @@ int RPC::sendall(int s, char *buf, int *len){
 
   *len = total; // return number actually sent here
 
-  return n==-1?-1:0; // return -1 on failure, 0 on success
+  return (n == -1) ? -1 : 0; // return -1 on failure, 0 on success
 } 
 
-void RPC::c_connect(){ //client connect
+void RPC::init(){
   FD_ZERO(&master_fds);
   FD_ZERO(&read_fds);
   FD_SET(STDIN, &master_fds);
   fd_max = STDIN;
+
+  if(program_options::client()){
+    c_connect();
+    return;
+  }
+
+  if(program_options::server()){
+    s_init();
+    return;
+  }
+}
+
+void RPC::c_connect(){ //client connect
   std::string text;
 
-  if(program_options::fileopt()){ //Check if file specified
+  //Try to get address from file
+  if(program_options::fileopt()){ 
     std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
     if(!file.is_open()){
       throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
+    file.close();
     }
     std::getline(file, text);
-  } else { //Try the default
-    std::ifstream file(static_cast<std::string>("server.txt"), std::ios::in);
-    if(!file.is_open()){
-    }
-    std::getline(file, text);
-  }
+    file.close();
+  } 
 
   //Try manual input
   if(text.empty()){
@@ -59,13 +71,15 @@ void RPC::c_connect(){ //client connect
     }
   }
 
+  //Try to parse an address and port from input
   if(text.find(":") == std::string::npos){
-    throw std::runtime_error("rpc-cli: Could not inperpret server address");
+    throw std::runtime_error("Could not inperpret server address");
   }
 
   auto server{ text.substr(0, text.find(":")) };
   auto port{ text.substr(text.find(":")+1, text.back()) };
 
+  //Useful variables for connecting
   struct addrinfo hints, *servinfo, *p;
   int rv;
 
@@ -121,7 +135,10 @@ RPC::Move RPC::get_move(){
       break;
     }
   }
-  std::cout << "\x1b[A" << "\b \b";
+
+  //auto p{ std::cout.tellp() };
+  std::cout << "\x1b[A" << "\r \r";
+  //std::cout << "tellp: " << p;
 
 
   switch(c){
@@ -142,12 +159,11 @@ RPC::Move RPC::get_move(){
 void RPC::get_a(){
   m_a=get_move();
 
-  if( ( program_options::client() || program_options::server() ) && m_a != MAX_MOVE){
+  if( program_options::online() && m_a != MAX_MOVE){
     char buf[2];
     int len{sizeof(buf)};
     reinterpret_cast<uint16_t*>(buf)[0] = htons(m_a);
     sendall(m_sockfd, buf, &len);
-    FD_CLR(STDIN, &master_fds);
   }
 }
 
@@ -203,35 +219,32 @@ void RPC::print(){
       return;
   }
 
-  if(program_options::client() || program_options::server()){
+  if(program_options::online()){
     std::cout << "You " << (aWins ? "Win" : "Lose") << "!\n";
   } else {
-    std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
+    std::cout << "The Winner Is Player: " << (aWins ? "A" : "B") << '\n';
   }
 }
 
-void RPC::s_init(){ //Run this before s_listen()
-  FD_ZERO(&master_fds);
-  FD_ZERO(&read_fds);
-  FD_SET(STDIN, &master_fds);
+//Initialize the Server
+void RPC::s_init(){
   std::string text;
 
-  if(program_options::fileopt()){ //Check if file specified
+  //Try to get port from file
+  if(program_options::fileopt()){ 
     std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
     if(!file.is_open()){
       throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
+      file.close();
     }
     std::getline(file, text);
-  } else { //try default file
-    std::ifstream file(static_cast<std::string>("port.txt"), std::ios::in);
-    if(!file.is_open()){
-    }
-    std::getline(file, text);
+      file.close();
   }
 
   //try manual input
   if(text.empty()){
     while(true){
+      std::cout << "Open server on port: ";
       std::cin >> text;
       std::cin.clear();
       std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -242,6 +255,7 @@ void RPC::s_init(){ //Run this before s_listen()
     }
   }
 
+  //useful variables for server initialization
   struct addrinfo hints, *servinfo, *p;
   int rv;
 
@@ -289,67 +303,72 @@ void RPC::s_init(){ //Run this before s_listen()
   fd_max=m_listener; //Newest socket will be our largest
 }
 
-void RPC::handle_fd(int i){
-  //unfortunately cannot use switches on non-constexpr 
-  if(i == m_listener){ //accept connection
-    std::cout << "handing listener fd\n";
+void RPC::s_accept(){
+  char remoteIP[INET6_ADDRSTRLEN];
+  struct sockaddr_storage remoteaddr;
+  socklen_t addrlen = sizeof(remoteaddr);
 
-    char remoteIP[INET6_ADDRSTRLEN];
-    struct sockaddr_storage remoteaddr;
-    socklen_t addrlen = sizeof(remoteaddr);
-
-    if(m_sockfd != -1){
-      std::cerr << "A new client tried to connect but we already have an opponent\n";
-      close(accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen));
-      return;
-    }
-
-    m_sockfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
-
-    if(m_sockfd == -1){
-      perror("accept");
-      close(m_sockfd);
-    } else {
-      FD_SET(m_sockfd, &master_fds);
-      if(fd_max<m_sockfd){ fd_max = m_sockfd; }
-      std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << m_sockfd << '\n';
-    }
+  if(m_sockfd != -1){
+    std::cerr << "A new client tried to connect but we already have an opponent\n";
+    close(accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen));
     return;
   }
 
-  if(i == m_sockfd){ //handle data from opponent
-    std::cout << "handing sockfd fd\n";
+  m_sockfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
+
+  if(m_sockfd == -1){
+    perror("accept");
+    close(m_sockfd);
+  } else {
+    FD_SET(m_sockfd, &master_fds);
+    if(fd_max<m_sockfd){ fd_max = m_sockfd; }
+    std::cout << "rpc-cli: server: new connection from " << inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN) << " on socket " << m_sockfd << '\n';
+  }
+  return;
+}
+
+void RPC::handle_fd(int fd){
+  //unfortunately cannot use switches on non-constexpr 
+  if(fd == m_listener){ //handle connection
+    s_accept();
+  }
+
+  if(fd == m_sockfd){ //handle data from opponent
     int nbytes;
     char buf[2];
-    if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
+    if((nbytes = recv(fd, buf, sizeof(buf), 0)) <=0){
       //recv
       if(nbytes == 0){
         //connection closed
-        std::cout << " rpc-cli: server: socket " << i << " hung up\n";
+        std::cout << " rpc-cli: server: socket " << fd << " hung up\n";
       } else {
         perror("recv");
       }
-      close(i);
-      FD_CLR(i, &master_fds);
-      std::string err{"rpc-cli: server: socket " + i};
+      close(fd);
+      FD_CLR(fd, &master_fds);
+      std::string err{"rpc-cli: server: socket " + fd};
       err += " hung up";
       throw std::runtime_error(err);
       return;
     } 
 
+    //cast to Move
     m_b = static_cast<Move>(ntohs(*reinterpret_cast<int16_t*>(buf)));
-    std::cout << "m_b recieved: " << static_cast<Move>(ntohs(*reinterpret_cast<int16_t*>(buf)));
+
     return;
   }
 
-  if(i == STDIN){ //handle user input
+  if(fd == STDIN){ //handle user input
+    if(std::cin.peek() == 'q'){ //Check if user hit q
+      throw std::runtime_error("Quitting..."); //I dont want to implement a better solution
+    }
+
     if(m_sockfd == -1){
       std::cout << "Still ";
       std::cin.clear();
       std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       return;
     }
-    std::cout << "handing stdin fd\n";
     get_a();
     return;
   }
@@ -357,7 +376,7 @@ void RPC::handle_fd(int i){
   return;
 }
 
-void RPC::n_run(){
+void RPC::n_run(){ //Run a networked game of RPC
   while(true){
     if(m_sockfd == -1){
       std::cout << "Waiting for player to join...\n";
@@ -377,16 +396,18 @@ void RPC::n_run(){
 
     for(int i{0}; i<=fd_max; ++i){
       if(FD_ISSET(i, &read_fds)){
-        std::cout << "handling our fds";
         handle_fd(i);
       }
       if(m_a != MAX_MOVE && m_b != MAX_MOVE){
         print();
         return;
-      } else {
-        std::cout << "m_a: " << m_a << '\n';
-        std::cout << "m_b: " << m_b << '\n';
-      }
+      } 
     }
   }
+}
+
+void RPC::l_run(){
+  get_a();
+  get_b();
+  print();
 }

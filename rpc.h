@@ -45,13 +45,19 @@ private:
   Move get_move();
   void handle_fd(int i);
 
-public:
   void get_a();
   void get_b();
 
   void c_connect();
   void s_init();
+
+public:
+  void init();
+
+  void s_accept();
+
   void n_run();
+  void l_run();
 
   void print();
 };

@@ -13,8 +13,10 @@
 namespace program_options{
 void parse(int argc, char* argv[]);
 
+bool help();
 bool server();
 bool client();
+bool online();
 bool fileopt();
 const std::string_view& file();
 }; //namespace program_options
