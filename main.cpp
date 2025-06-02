@@ -7,7 +7,7 @@ int main(int argc, char* argv[]){
     program_options::parse(argc, argv);
   } catch (const std::exception &x) {
     std::cerr << x.what() << '\n';
-    std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";
+    std::cerr << "usage: rpc-cli [-c|--connect [-f|--file <file>]] [-s|--server [-f|--file <file>]]\n";
     return 1;
   }
 
@@ -16,27 +16,29 @@ int main(int argc, char* argv[]){
   if(program_options::server()){
     try {
       rpc.s_init();
-      rpc.s_listen();
+      rpc.n_run();
     } catch (const std::exception &x) {
       std::cerr << x.what() << '\n';
-      std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";
+      std::cerr << "usage: rpc-cli [-s|--server [-f|--file <file>]]\n";
       return 1;
     }
   }
-  if(program_options::online()){
+  if(program_options::client()){
     try {
       rpc.c_connect();
-      rpc.c_run();
+      rpc.n_run();
     } catch (const std::exception &x) {
       std::cerr << x.what() << '\n';
-      std::cerr << "usage: rpc-cli [-o|--online [-f|--file <file>]]\n";
+      std::cerr << "usage: rpc-cli [-c|--connect [-f|--file <file>]]\n";
       return 1;
     }
   }
 
-  rpc.get_a();
-  rpc.get_b();
-  rpc.print();
+  if(!program_options::client() && !program_options::server()){
+    rpc.get_a();
+    rpc.get_b();
+    rpc.print();
+  }
 
   std::cout << sizeof(RPC);
 

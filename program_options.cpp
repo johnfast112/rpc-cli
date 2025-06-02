@@ -6,7 +6,7 @@
 
 namespace {
 static bool         _server   { false };
-static bool         _online   { false };
+static bool         _client   { false };
 static bool         _fileopt  { false };
 static std::string_view _file {};
 }
@@ -19,14 +19,14 @@ void program_options::parse(int argc, char* argv[]){
   const std::vector<std::string_view> args(argv, argv + argc);
 
   for(auto arg = args.begin(), end = args.end(); arg != end; ++arg){
-    if(*arg == "-o" || *arg == "--online"){
-      if(_online){
-        throw std::runtime_error("Cannot use -o/--online param twice!");
+    if(*arg == "-c" || *arg == "--connect"){
+      if(_client){
+        throw std::runtime_error("Cannot use -c/--connect param twice!");
       }
       if(_server){
-        throw std::runtime_error("Cannot use -o/--online with -s/--server");
+        throw std::runtime_error("Cannot use -c/--connect with -s/--server");
       }
-      _online = true;
+      _client = true;
       continue;
     }
 
@@ -34,8 +34,8 @@ void program_options::parse(int argc, char* argv[]){
       if(_fileopt){
         throw std::runtime_error("Cannot use -f/--file param twice!");
       }
-      if(!_online && !_server){
-        throw std::runtime_error("Cannot use -f/--file without first specifying -o/--online or -s/--server");
+      if(!_client && !_server){
+        throw std::runtime_error("Cannot use -f/--file without first specifying -c/--connect or -s/--server");
       }
 
       if(arg + 1 != end){
@@ -50,10 +50,15 @@ void program_options::parse(int argc, char* argv[]){
       if(_server){
         throw std::runtime_error("Cannot use -s/--server param twice!");
       }
-      if(_online){
-        throw std::runtime_error("Cannot use -s/--server with -o/--online");
+      if(_client){
+        throw std::runtime_error("Cannot use -s/--server with -c/--connect");
       }
       _server = true;
+      continue;
+    }
+
+    if(*arg == "-h" || *arg == "--help"){
+      throw std::runtime_error("");
       continue;
     }
 
@@ -65,8 +70,8 @@ bool program_options::server(){
   return _server;
 }
 
-bool program_options::online(){
-  return _online;
+bool program_options::client(){
+  return _client;
 }
 
 bool program_options::fileopt(){

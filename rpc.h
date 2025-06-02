@@ -50,9 +50,8 @@ public:
   void get_b();
 
   void c_connect();
-  void c_run();
   void s_init();
-  void s_listen();
+  void n_run();
 
   void print();
 };

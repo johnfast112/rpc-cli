@@ -105,31 +105,8 @@ void RPC::c_connect(){ //client connect
   if(fd_max<m_sockfd){ fd_max = m_sockfd; }
 }
 
-void RPC::c_run(){
-  while(true){
-    if(m_a == -1){
-      std::cout << "What\'s Your Move? (1/2/3)\n";
-      std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
-    } else {
-      std::cout << "Awaiting opponent...\n";
-    }
-
-    read_fds = master_fds;
-    if(select(fd_max+1, &read_fds, NULL, NULL, NULL) == -1){
-      perror("select");
-      throw std::runtime_error("Something went wrong when polling sockets");
-    }
-
-    for(int i{0}; i<=fd_max; ++i){
-      if(FD_ISSET(i, &read_fds)){
-        handle_fd(i);
-      }
-    }
-  }
-}
-
 RPC::Move RPC::get_move(){
-  if(!program_options::online()){
+  if(!program_options::client()){
     std::cout << "What\'s Your Move? (1/2/3)\n";
     std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
   }
@@ -144,6 +121,8 @@ RPC::Move RPC::get_move(){
       break;
     }
   }
+  std::cout << "\x1b[A" << "\b \b";
+
 
   switch(c){
     case '1':
@@ -163,11 +142,12 @@ RPC::Move RPC::get_move(){
 void RPC::get_a(){
   m_a=get_move();
 
-  if(program_options::online() || program_options::server()){
+  if( ( program_options::client() || program_options::server() ) && m_a != MAX_MOVE){
     char buf[2];
     int len{sizeof(buf)};
     reinterpret_cast<uint16_t*>(buf)[0] = htons(m_a);
     sendall(m_sockfd, buf, &len);
+    FD_CLR(STDIN, &master_fds);
   }
 }
 
@@ -223,12 +203,17 @@ void RPC::print(){
       return;
   }
 
-  std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
+  if(program_options::client() || program_options::server()){
+    std::cout << "You " << (aWins ? "Win" : "Lose") << "!\n";
+  } else {
+    std::cout << "The Winner Is: " << (aWins ? "A" : "B") << '\n';
+  }
 }
 
 void RPC::s_init(){ //Run this before s_listen()
   FD_ZERO(&master_fds);
   FD_ZERO(&read_fds);
+  FD_SET(STDIN, &master_fds);
   std::string text;
 
   if(program_options::fileopt()){ //Check if file specified
@@ -307,14 +292,17 @@ void RPC::s_init(){ //Run this before s_listen()
 void RPC::handle_fd(int i){
   //unfortunately cannot use switches on non-constexpr 
   if(i == m_listener){ //accept connection
-    if(m_sockfd != -1){
-      std::cerr << "A new client tried to connect but we already have an opponent\n";
-      return;
-    }
+    std::cout << "handing listener fd\n";
 
     char remoteIP[INET6_ADDRSTRLEN];
     struct sockaddr_storage remoteaddr;
     socklen_t addrlen = sizeof(remoteaddr);
+
+    if(m_sockfd != -1){
+      std::cerr << "A new client tried to connect but we already have an opponent\n";
+      close(accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen));
+      return;
+    }
 
     m_sockfd = accept(m_listener, (struct sockaddr*)&remoteaddr, &addrlen);
 
@@ -330,6 +318,7 @@ void RPC::handle_fd(int i){
   }
 
   if(i == m_sockfd){ //handle data from opponent
+    std::cout << "handing sockfd fd\n";
     int nbytes;
     char buf[2];
     if((nbytes = recv(i, buf, sizeof(buf), 0)) <=0){
@@ -349,10 +338,18 @@ void RPC::handle_fd(int i){
     } 
 
     m_b = static_cast<Move>(ntohs(*reinterpret_cast<int16_t*>(buf)));
+    std::cout << "m_b recieved: " << static_cast<Move>(ntohs(*reinterpret_cast<int16_t*>(buf)));
     return;
   }
 
   if(i == STDIN){ //handle user input
+    if(m_sockfd == -1){
+      std::cout << "Still ";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      return;
+    }
+    std::cout << "handing stdin fd\n";
     get_a();
     return;
   }
@@ -360,12 +357,15 @@ void RPC::handle_fd(int i){
   return;
 }
 
-void RPC::s_listen(){
+void RPC::n_run(){
   while(true){
-    if(m_a == -1){
+    if(m_sockfd == -1){
+      std::cout << "Waiting for player to join...\n";
+    }
+    if(m_a == MAX_MOVE && m_sockfd != -1){
       std::cout << "What\'s Your Move? (1/2/3)\n";
       std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
-    } else {
+    } else if(m_sockfd != -1){
       std::cout << "Awaiting opponent...\n";
     }
 
@@ -377,7 +377,15 @@ void RPC::s_listen(){
 
     for(int i{0}; i<=fd_max; ++i){
       if(FD_ISSET(i, &read_fds)){
+        std::cout << "handling our fds";
         handle_fd(i);
+      }
+      if(m_a != MAX_MOVE && m_b != MAX_MOVE){
+        print();
+        return;
+      } else {
+        std::cout << "m_a: " << m_a << '\n';
+        std::cout << "m_b: " << m_b << '\n';
       }
     }
   }
