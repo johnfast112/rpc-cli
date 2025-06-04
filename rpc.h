@@ -51,6 +51,8 @@ private:
   void c_connect();
   void s_init();
 
+  friend std::ostream& operator<<(std::ostream&, RPC::Move);
+
 public:
   void init();
 

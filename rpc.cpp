@@ -51,7 +51,7 @@ void RPC::c_connect(){ //client connect
     std::ifstream file(static_cast<std::string>(program_options::file()), std::ios::in);
     if(!file.is_open()){
       throw std::runtime_error("rpc-cli: Could not open input file: " + static_cast<std::string>(program_options::file()));
-    file.close();
+      file.close();
     }
     std::getline(file, text);
     file.close();
@@ -89,7 +89,7 @@ void RPC::c_connect(){ //client connect
 
   if((rv = getaddrinfo(static_cast<std::string>(server).c_str(), static_cast<std::string>(port).c_str(), &hints, &servinfo)) != 0){
     std::cerr << "getaddrinfo: " << gai_strerror(rv) << '\n';
-    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
+    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly. Also make sure your opponent is still hosting and waiting for an opponent.");
   }
 
   //Loop through until we get a connection
@@ -103,7 +103,7 @@ void RPC::c_connect(){ //client connect
     if(connect(m_sockfd, p->ai_addr, p->ai_addrlen) == -1){ //Try to connect
       close(m_sockfd);
       perror("client: connect");
-      throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
+    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly. Also make sure your opponent is still hosting and waiting for an opponent.");
     }
 
     break;
@@ -112,7 +112,7 @@ void RPC::c_connect(){ //client connect
   freeaddrinfo(servinfo); //Done with this data
 
   if(p == NULL){ // Could not find an addrinfo to connect to
-    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly.");
+    throw std::runtime_error("Unable to connect to server. Make sure you entered the address and port correctly. Also make sure your opponent is still hosting and waiting for an opponent.");
   }
 
   FD_SET(m_sockfd, &master_fds);
@@ -120,7 +120,7 @@ void RPC::c_connect(){ //client connect
 }
 
 RPC::Move RPC::get_move(){
-  if(!program_options::client()){
+  if(!program_options::online()){
     std::cout << "What\'s Your Move? (1/2/3)\n";
     std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
   }
@@ -157,6 +157,10 @@ RPC::Move RPC::get_move(){
 }
 
 void RPC::get_a(){
+  if(m_a != MAX_MOVE){ //Already got a
+    return;
+  }
+
   m_a=get_move();
 
   if( program_options::online() && m_a != MAX_MOVE){
@@ -168,6 +172,10 @@ void RPC::get_a(){
 }
 
 void RPC::get_b(){
+  if(m_b != MAX_MOVE){ //Already got b
+    return;
+  }
+
   m_b=get_move();
 }
 
@@ -175,6 +183,14 @@ void RPC::print(){
   if(m_a == MAX_MOVE || m_b == MAX_MOVE){
     std::cout << "A Player Has Yet To Make Their Move\n";
     return;
+  }
+
+  if(program_options::online()){
+    std::cout << "You: " << m_a << '\n';
+    std::cout << "Opponent: " << m_b << '\n';
+  } else {
+    std::cout << "Player A: " << m_a << '\n';
+    std::cout << "Player B: " << m_b << '\n';
   }
 
   if(m_a == m_b){
@@ -238,7 +254,7 @@ void RPC::s_init(){
       file.close();
     }
     std::getline(file, text);
-      file.close();
+    file.close();
   }
 
   //try manual input
@@ -266,7 +282,7 @@ void RPC::s_init(){
 
   if((rv = getaddrinfo(NULL, text.c_str(), &hints, &servinfo)) != 0){
     std::cerr << "getaddrinfo: " << gai_strerror(rv) << '\n';
-    throw std::runtime_error("Unable to create server. Make sure nothing else is running on this port.");
+    throw std::runtime_error("Unable to open port " + text + ". Make sure nothing else is running on this port");
   }
 
   //Loop through until we get a connection
@@ -289,7 +305,7 @@ void RPC::s_init(){
   }
 
   if(p == NULL){ // Could not find an addrinfo to connect to
-    throw std::runtime_error("server: failed to bind");
+    throw std::runtime_error("server: failed to bind to port " + text);
   }
 
   freeaddrinfo(servinfo); //Done with this data
@@ -382,6 +398,7 @@ void RPC::n_run(){ //Run a networked game of RPC
       std::cout << "Waiting for player to join...\n";
     }
     if(m_a == MAX_MOVE && m_sockfd != -1){
+      std::cout << "m_a == MAX_MOVE: " << m_a << '\n';
       std::cout << "What\'s Your Move? (1/2/3)\n";
       std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
     } else if(m_sockfd != -1){
@@ -406,8 +423,31 @@ void RPC::n_run(){ //Run a networked game of RPC
   }
 }
 
+//Local run theough events
 void RPC::l_run(){
   get_a();
   get_b();
   print();
+}
+
+std::ostream& operator<<(std::ostream& out, RPC::Move m){
+  switch(m){
+    case RPC::Move::ROCK:
+      out << "ROCK";
+      break;
+
+    case RPC::Move::PAPER:
+      out << "PAPER";
+      break;
+
+    case RPC::Move::SCISSORS:
+      out << "SCISSORS";
+      break;
+
+    default:
+      out << "ERR";
+      break;
+  }
+
+  return out;
 }

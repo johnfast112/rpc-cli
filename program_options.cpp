@@ -21,7 +21,7 @@ void program_options::parse(int argc, char* argv[]){
   //Makes bound checking and iterator arithmetic easier
   const std::vector<std::string_view> args(argv, argv + argc);
 
-  for(auto arg = args.begin(), end = args.end(); arg != end; ++arg){
+  for(auto arg = args.begin()+1, end = args.end(); arg != end; ++arg){
     //Set _client if appropriate
     if(*arg == "-c" || *arg == "--connect"){
       if(_client){
@@ -46,7 +46,6 @@ void program_options::parse(int argc, char* argv[]){
       continue;
     }
 
-
     //Set _fileopt and _file if possible, otherwise exit with error
     if(*arg == "-f" || *arg == "--file"){
       if(_fileopt){
@@ -60,6 +59,7 @@ void program_options::parse(int argc, char* argv[]){
       if(arg + 1 != end){
         _fileopt = true;
         _file = *(arg + 1);
+        ++arg; //Dont read arg as option
         continue;
       }
       throw std::runtime_error("Option -f/--file needs an argument!");
@@ -70,12 +70,24 @@ void program_options::parse(int argc, char* argv[]){
       _help = true;
       continue;
     }
-  }
 
+    if(
+      *arg != "-h" &&
+      *arg != "--help" &&
+      *arg != "-c" &&
+      *arg != "--connect" &&
+      *arg != "-f" &&
+      *arg != "--file" &&
+      *arg != "-s" &&
+      *arg != "--server"
+    ){
+      throw std::runtime_error("Invalid option '" + static_cast<std::string>(*arg) + '\'');
+    }
+  }
 }
 
 bool program_options::help(){
-  return _server;
+  return _help;
 }
 
 bool program_options::server(){

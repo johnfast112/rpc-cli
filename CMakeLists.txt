@@ -1,7 +1,7 @@
 # minimum version of cmake 3.10
 cmake_minimum_required(VERSION 3.13)
 
-project(rpc-cli VERSION 0.2)
+project(rpc-cli VERSION 1.0)
 
 # c++ standard
 set(CMAKE_CXX_STANDARD 17)
