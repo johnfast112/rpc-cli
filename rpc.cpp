@@ -403,6 +403,8 @@ void RPC::n_run(){ //Run a networked game of RPC
       std::cout << "1) Rock\n2) Paper\n3) Scissors\n";
     } else if(m_sockfd != -1){
       std::cout << "Awaiting opponent...\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
 
     read_fds = master_fds;
